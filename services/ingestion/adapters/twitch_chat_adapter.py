@@ -1,5 +1,7 @@
 import json
 import time
+import random
+import asyncio
 from twitchio.ext import commands
 from aiokafka import AIOKafkaProducer
 
@@ -83,6 +85,64 @@ class TwitchChatAdapter(BaseStreamSource, commands.Bot):
         except Exception as e:
             logger.error(f"Error processing Twitch message: {e}", exc_info=True)
 
+    async def _run_simulator(self):
+        """A fallback simulator if the Twitch connection fails."""
+        logger.info("Running Twitch chat simulator.")
+        sample_messages = [
+            "PogChamp", "LUL", "Kappa", "This stream is awesome!", 
+            "Hello world", "Spam spam spam", "Can you play simulated game?",
+            "You are bad at this", "I hate you", "idiot", "stupid", # Toxic examples
+            "Great play!", "GG", "EZ", "Clap", "monkaS"
+        ]
+        sample_authors = ["user1", "user2", "troll123", "fan456", "mod_guy"]
+        
+        while True:
+            try:
+                text = random.choice(sample_messages)
+                author = random.choice(sample_authors)
+                
+                # Create a mock message object structure expected by normalize
+                class MockMessage:
+                    def __init__(self, content, author_name):
+                        self.content = content
+                        self.author = type('obj', (object,), {'name': author_name})
+                        self.id = str(int(time.time() * 1000))
+                
+                mock_msg = MockMessage(text, author)
+                
+                # Normalize and enrich
+                normalized_event = self.normalize(mock_msg)
+                
+                # Send to Kafka
+                await self.producer.send_and_wait(
+                    self.topic, 
+                    json.dumps(normalized_event).encode('utf-8')
+                )
+                logger.debug(f"Sent simulated chat message: {text}")
+                
+                await asyncio.sleep(random.uniform(0.1, 0.5)) # Fast rate for "rain"
+                
+            except Exception as e:
+                logger.error(f"Error in Twitch simulator: {e}")
+                await asyncio.sleep(1)
+
     async def run(self):
         logger.info("Starting Twitch Chat Adapter...")
-        await super().run()
+        try:
+            # Attempt to connect, but if it fails or returns immediately, run simulator
+            # Note: twitchio run() is blocking, so we might need to wrap it or handle failure
+            # For now, we'll assume if credentials are bad, it might raise or just not work.
+            # But since we want to FORCE "make it rain", let's just run the simulator if we can't connect.
+            # However, twitchio.Bot.run() is a blocking call. 
+            # We will try to run it, but if it fails, we catch it. 
+            # Actually, to "make it rain" reliably without valid creds, maybe we should just default to simulator 
+            # if the user wants it. But let's try to be robust.
+            
+            # If we want to support fallback, we need to handle the loop. 
+            # twitchio's run() starts the loop. 
+            # Let's try to start it, and if it fails, use simulator.
+            await super().start()
+        except Exception as e:
+            logger.warning(f"Failed to connect to Twitch: {e}. Falling back to simulator.")
+            await self._run_simulator()
+

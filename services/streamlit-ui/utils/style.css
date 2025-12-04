@@ -1,0 +1,50 @@
+/* Global Styles */
+body {
+  color: #fff;
+  background-color: #0e1117;
+}
+
+.stApp {
+  background-color: #0e1117;
+}
+
+/* Sidebar */
+.css-1d391kg {
+  background-color: #262730;
+}
+
+/* Metrics */
+div[data-testid="metric-container"] {
+  background-color: #262730;
+  border: 1px solid #4c4c4c;
+  padding: 10px;
+  border-radius: 5px;
+  color: #fff;
+}
+
+/* Headers */
+h1,
+h2,
+h3 {
+  color: #fafafa;
+}
+
+/* Custom Classes */
+.metric-box {
+  padding: 20px;
+  background-color: #1f2937;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #60a5fa;
+}
+
+.metric-label {
+  font-size: 14px;
+  color: #9ca3af;
+}

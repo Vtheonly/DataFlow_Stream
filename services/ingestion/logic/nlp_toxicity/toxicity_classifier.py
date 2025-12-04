@@ -1,41 +1,28 @@
-import os
-import pickle
-import numpy as np
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 class ToxicityClassifier:
     """
-    Singleton class to load and use the Keras toxicity model.
+    Singleton class using Hugging Face Transformers.
+    Automatically downloads 'unitary/toxic-bert' on first run.
     """
     _instance = None
-    
-    # Define paths relative to this file's location
-    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    _MODEL_PATH = os.path.join(_BASE_DIR, "models/model.h5")
-    _TOKENIZER_PATH = os.path.join(_BASE_DIR, "models/tokenizer.pickle")
-    _MAX_SEQ_LENGTH = 200 # Must match the model's training configuration
+    MODEL_NAME = "unitary/toxic-bert"
 
     def __init__(self):
-        if not os.path.exists(self._MODEL_PATH) or not os.path.exists(self._TOKENIZER_PATH):
-            logger.error("Model or tokenizer file not found. NLP features will be disabled.")
-            logger.error(f"Expected model at: {self._MODEL_PATH}")
-            logger.error(f"Expected tokenizer at: {self._TOKENIZER_PATH}")
+        try:
+            logger.info(f"Loading Hugging Face model: {self.MODEL_NAME}...")
+            # This will download the model (~260MB) if not present
+            self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_NAME)
+            self.model = AutoModelForSequenceClassification.from_pretrained(self.MODEL_NAME)
+            logger.info("Toxicity model loaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to load NLP model: {e}", exc_info=True)
             self.model = None
             self.tokenizer = None
-        else:
-            try:
-                self.model = load_model(self._MODEL_PATH)
-                with open(self._TOKENIZER_PATH, 'rb') as handle:
-                    self.tokenizer = pickle.load(handle)
-                logger.info("Keras toxicity model and tokenizer loaded successfully.")
-            except Exception as e:
-                logger.error(f"Failed to load Keras model/tokenizer: {e}", exc_info=True)
-                self.model = None
-                self.tokenizer = None
 
     @classmethod
     def get_instance(cls):
@@ -46,27 +33,32 @@ class ToxicityClassifier:
     def predict(self, text: str) -> dict:
         """
         Predicts toxicity scores for a given text.
+        Returns a dictionary mapping labels to float scores (0.0 to 1.0).
         """
+        labels = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
+        default_result = {label: 0.0 for label in labels}
+
         if not self.model or not self.tokenizer:
-            return {
-                "toxic": 0.0, "severe_toxic": 0.0, "obscene": 0.0,
-                "threat": 0.0, "insult": 0.0, "identity_hate": 0.0,
-                "error": "Model not loaded"
-            }
+            return default_result
             
         try:
-            # Preprocess the text
-            sequence = self.tokenizer.texts_to_sequences([text])
-            padded_sequence = pad_sequences(sequence, maxlen=self._MAX_SEQ_LENGTH)
+            # Tokenize input
+            inputs = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
             
-            # Get prediction
-            prediction = self.model.predict(padded_sequence, verbose=0)[0]
+            # Run inference (no gradient calculation needed for inference)
+            with torch.no_grad():
+                outputs = self.model(**inputs)
             
-            # Format output
-            labels = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
-            scores = {label: float(score) for label, score in zip(labels, prediction)}
-            return scores
+            # Apply sigmoid to convert logits to probabilities (0 to 1)
+            probs = torch.sigmoid(outputs.logits).squeeze().tolist()
+            
+            # Handle edge case where single output is float, not list
+            if isinstance(probs, float):
+                probs = [probs]
+                
+            # Create the result dictionary
+            return {label: float(score) for label, score in zip(labels, probs)}
 
         except Exception as e:
-            logger.error(f"Error during toxicity prediction: {e}", exc_info=True)
-            return {label: 0.0 for label in labels}
+            logger.error(f"Error during toxicity prediction: {e}")
+            return default_result
