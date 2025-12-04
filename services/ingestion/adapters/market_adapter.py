@@ -87,6 +87,11 @@ class MarketAdapter(BaseStreamSource):
                 self.topic,
                 json.dumps(normalized_event).encode('utf-8')
             )
+            
+            # Also write directly to MongoDB
+            from utils.mongo_client import save_event
+            save_event(normalized_event.copy())
+            
             logger.debug("Sent simulated market event to Kafka.")
             await asyncio.sleep(1)
 

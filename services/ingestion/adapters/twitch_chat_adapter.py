@@ -118,9 +118,14 @@ class TwitchChatAdapter(BaseStreamSource, commands.Bot):
                     self.topic, 
                     json.dumps(normalized_event).encode('utf-8')
                 )
+                
+                # Also write directly to MongoDB
+                from utils.mongo_client import save_event
+                save_event(normalized_event.copy())
+                
                 logger.debug(f"Sent simulated chat message: {text}")
                 
-                await asyncio.sleep(random.uniform(0.1, 0.5)) # Fast rate for "rain"
+                await asyncio.sleep(random.uniform(0.5, 1.5))
                 
             except Exception as e:
                 logger.error(f"Error in Twitch simulator: {e}")

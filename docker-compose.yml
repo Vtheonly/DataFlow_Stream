@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   zookeeper:
@@ -20,7 +20,7 @@ services:
       - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -56,11 +56,14 @@ services:
       - "8081:8081"
     environment:
       ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_BASICAUTH: "false"
 
   spark-master:
-    image: apache/spark-py:latest
+    build:
+      context: ./services/spark
     container_name: spark-master
-    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    command:
+      ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
     ports:
       - "8082:8080"
       - "7077:7077"
@@ -74,9 +77,15 @@ services:
       - SPARK_SSL_ENABLED=no
 
   spark-worker:
-    image: apache/spark-py:latest
+    build:
+      context: ./services/spark
     container_name: spark-worker
-    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    command:
+      [
+        "/opt/spark/bin/spark-class",
+        "org.apache.spark.deploy.worker.Worker",
+        "spark://spark-master:7077",
+      ]
     depends_on:
       - spark-master
     environment:
