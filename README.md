@@ -12,13 +12,34 @@ This project is a complete, production-ready real-time data processing pipeline 
 - **Orchestration**: Docker Compose
 - **NLP**: Hugging Face Transformers / PyTorch
 
-## Features
+## Project Status: What It Has vs. What It Does Not Have
 
-- **Multi-Source Ingestion**: Unified adapter pattern to connect to Twitch chat, market data streams, and more.
-- **Real-Time NLP**: Live toxicity analysis on chat messages.
-- **Real-Time Anomaly Detection**: Z-score and volatility spike detection for market data; toxicity and frequency anomaly detection for chat data.
-- **End-to-End Streaming**: A fully containerized pipeline from data source to dashboard.
-- **Live Monitoring**: A Streamlit dashboard visualizes live data, toxicity scores, market anomalies, and system health.
+To maintain accuracy, here is a breakdown of the current implementation status.
+
+### What It Has (Fully Implemented)
+
+- **Unified Ingestion Pipeline**: A robust adapter pattern for Twitch Chat (via WebSockets) and Market Data (Binance Trade Streams).
+- **Real-Time NLP Enrichment**: Automatic toxicity classification for every chat message using the `unitary/toxic-bert` model.
+- **Statistical Anomaly Detection**:
+  - **Market**: Rolling Z-score detection to flag price volatility spikes.
+  - **Chat**: Toxicity spike detection and per-user frequency monitoring (spam detection).
+- **Scalable Messaging Backbone**: Apache Kafka handles all internal data routing with Zookeeper coordination.
+- **Structured Streaming Analytics**: Apache Spark jobs process Kafka streams and persist structured, enriched data to MongoDB.
+- **Advanced Dashboarding**: A dynamic Streamlit UI featuring:
+  - Real-time price charts with anomaly markers.
+  - Z-score history and rolling statistics (Mean, StdDev).
+  - Integrated chat toxicity scores and colored message indicators.
+  - Platform health metrics.
+- **Full Containerization**: Entire stack orchestrated via Docker Compose for easy reproduction.
+
+### What It Does Not Have (Limitations & Planned)
+
+- **Scalable Cluster Deployment**: While modular, the current Docker Compose setup is optimized for single-node development, not multi-node Kubernetes orchestration.
+- **Long-Term Big Data Storage**: Data is primarily stored in MongoDB for dashboarding; it lacks a dedicated "Data Lake" (like S3/HDFS) for years of raw archival.
+- **Advanced Financial Indicators**: Currently focuses on Price/Z-score; technical indicators like RSI, MACD, or Order Book depth are not yet implemented.
+- **Multi-Channel/Multi-Asset Scoped Ingestion**: The adapters are currently configured via single environment variables (one Twitch channel, one Market symbol) rather than a dynamic management API.
+- **Enterprise Security**: The Streamlit dashboard and Mongo Express are open by default; they lack a built-in user authentication layer (OAuth/LDAP).
+- **Industrial Monitoring**: Uses basic dashboard metrics; lacks integration with specialized tools like Prometheus, Grafana, or ELK stack for log aggregation.
 
 ## How to Run
 
