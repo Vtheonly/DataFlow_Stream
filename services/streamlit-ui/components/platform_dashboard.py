@@ -2,7 +2,7 @@ import streamlit as st
 from utils.mongo_client import get_db_stats
 
 def display_platform_dashboard():
-    st.header("🚀 Platform Status")
+    st.header("Platform Status")
     
     stats = get_db_stats()
 

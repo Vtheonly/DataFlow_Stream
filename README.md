@@ -10,7 +10,7 @@ This project is a complete, production-ready real-time data processing pipeline 
 - **Database**: MongoDB
 - **Dashboard/UI**: Streamlit
 - **Orchestration**: Docker Compose
-- **NLP**: Keras/TensorFlow
+- **NLP**: Hugging Face Transformers / PyTorch
 
 ## Features
 
@@ -23,10 +23,12 @@ This project is a complete, production-ready real-time data processing pipeline 
 ## How to Run
 
 1.  **Prerequisites**:
+
     - Docker and Docker Compose installed.
     - Python 3.9+
 
 2.  **Configuration**:
+
     - Copy `.env.local` to a new file named `.env.development`.
     - Fill in the required environment variables:
       - `TWITCH_OAUTH_TOKEN`: Your Twitch OAuth token.
@@ -34,6 +36,7 @@ This project is a complete, production-ready real-time data processing pipeline 
       - `TWITCH_CHANNEL`: The Twitch channel to monitor.
 
 3.  **Build and Run**:
+
     ```bash
     docker-compose up --build
     ```
@@ -49,11 +52,9 @@ The system is composed of several microservices orchestrated by Docker Compose.
 
 1.  **Ingestion Service**: A Python service that connects to data sources (Twitch, Binance), normalizes the data, runs NLP and anomaly detection, and produces events to Kafka topics.
 2.  **Kafka Cluster**: Acts as the central data bus for all real-time events.
-3.  **Spark Cluster**: Consumes data from Kafka, performs stateful aggregations and transformations, and writes results to MongoDB.
+3.  **Spark Cluster**: Consumes data from Kafka, validates schemas, and routes structured events to MongoDB collections.
 4.  **MongoDB**: Stores the raw and enriched data for querying by the dashboard.
 5.  **Streamlit UI**: A Python web application that queries MongoDB to provide a real-time visualization of the pipeline's data.
-
-
 
 Below is the **full, deep, end-to-end explanation** of everything you are building.
 This is the “from scratch, understand every component, understand the workflow, understand each feature, and understand what the final system does” version.
@@ -82,7 +83,7 @@ Think of it as a mini version of what Twitch, TikTok, Binance, or Netflix use in
 
 **DataFlow Stream: A unified system that ingests, analyzes, enriches, detects anomalies, stores, and visualizes data in real time.**
 
-It handles *two* streaming sources:
+It handles _two_ streaming sources:
 
 1. **Twitch live chat**
 2. **Market price streams**
@@ -91,15 +92,15 @@ Everything is modular, meaning it can ingest more sources later.
 
 The system performs:
 
-* real-time ingestion
-* normalization
-* NLP toxicity detection
-* anomaly detection
-* structured streaming analytics
-* persistence
-* real-time dashboards
+- real-time ingestion
+- normalization
+- NLP toxicity detection
+- anomaly detection
+- structured streaming analytics
+- persistence
+- real-time dashboards
 
-And everything runs in *distributed microservices* under **Docker Compose.**
+And everything runs in _distributed microservices_ under **Docker Compose.**
 
 ---
 
@@ -145,11 +146,11 @@ This layer is built using pure Python and OOP design.
 
 A parent class enforcing:
 
-* connect()
-* read()
-* close()
-* error handling
-* message format consistency
+- connect()
+- read()
+- close()
+- error handling
+- message format consistency
 
 It defines the interface so all adapters behave identically.
 
@@ -159,15 +160,15 @@ It defines the interface so all adapters behave identically.
 
 This component:
 
-* connects to Twitch API or IRC WebSocket
-* receives every message the moment it appears
-* extracts useful fields:
+- connects to Twitch API or IRC WebSocket
+- receives every message the moment it appears
+- extracts useful fields:
 
-  * username
-  * message
-  * timestamp
-  * channel
-  * metadata
+  - username
+  - message
+  - timestamp
+  - channel
+  - metadata
 
 It converts raw Twitch messages into a structured Python dict.
 
@@ -179,10 +180,10 @@ This connects to a crypto exchange stream (Binance, Coinbase, or simulated).
 
 It ingests:
 
-* price
-* volume
-* market direction
-* timestamp
+- price
+- volume
+- market direction
+- timestamp
 
 Every tick becomes a structured event.
 
@@ -204,12 +205,12 @@ All incoming events—whether from Twitch or market streams—are converted into
 
 This is essential because:
 
-* Kafka expects consistent formats
-* Spark needs structured input
-* MongoDB prefers predictable schemas
-* your dashboard can treat all streams uniformly
+- Kafka expects consistent formats
+- Spark needs structured input
+- MongoDB prefers predictable schemas
+- your dashboard can treat all streams uniformly
 
-This is how you build *extensible* software.
+This is how you build _extensible_ software.
 
 ---
 
@@ -219,25 +220,25 @@ Every Twitch message goes through your NLP toxic-language classifier.
 
 ### What it does:
 
-* loads a trained Keras model
-* loads a tokenizer
-* processes text
-* predicts several labels:
+- automatically downloads and uses the `unitary/toxic-bert` model from Hugging Face
+- loads a tokenizer
+- processes text
+- predicts several labels:
 
-  * toxic
-  * severe toxic
-  * insult
-  * threat
-  * obscene
+  - toxic
+  - severe toxic
+  - insult
+  - threat
+  - obscene
 
 ### Why this matters:
 
 Real-time chat analysis becomes possible:
 
-* block toxic users
-* detect chat raids
-* measure community health
-* flag suspicious accounts
+- block toxic users
+- detect chat raids
+- measure community health
+- flag suspicious accounts
 
 Every message gets a **toxicity score** before it reaches Kafka.
 
@@ -249,19 +250,19 @@ This handles both chat and market anomalies.
 
 ### Market anomalies:
 
-* sudden jumps
-* volatility spikes
-* abnormal volume
-* deviation from rolling mean
-* z-score outliers
+- sudden jumps
+- volatility spikes
+- abnormal volume
+- deviation from rolling mean
+- z-score outliers
 
 ### Twitch anomalies:
 
-* message rate spikes
-* coordinated spam
-* high toxicity bursts
-* repeating patterns
-* bot detection
+- message rate spikes
+- coordinated spam
+- high toxicity bursts
+- repeating patterns
+- bot detection
 
 This layer annotates each event with anomaly metadata.
 
@@ -286,16 +287,15 @@ Kafka is the **distributed messaging backbone**.
 
 ### What Kafka does:
 
-* receives events from the ingestion layer
-* partitions them
-* acts as a durable, scalable log
-* allows Spark, monitoring, archival systems to consume simultaneously
+- receives events from the ingestion layer
+- partitions them
+- acts as a durable, scalable log
+- allows Spark, monitoring, archival systems to consume simultaneously
 
 ### Topics:
 
-* `chat_stream`
-* `market_stream`
-* `analytics_stream`
+- `chat_stream`
+- `market_stream`
 
 ### Why Kafka matters:
 
@@ -308,11 +308,11 @@ Kafka is the **buffer between ingestion and analytics**, preventing overload.
 
 Zookeeper manages Kafka’s cluster consistency:
 
-* elects leaders
-* tracks broker health
-* stores metadata
-* ensures failover
-* coordinates partitions
+- elects leaders
+- tracks broker health
+- stores metadata
+- ensures failover
+- coordinates partitions
 
 Kafka does **not** work without Zookeeper (unless using KRaft, which we will not).
 
@@ -320,30 +320,20 @@ Kafka does **not** work without Zookeeper (unless using KRaft, which we will not
 
 ## 6. Spark Structured Streaming
 
-Spark is the system’s real-time brain.
+Spark is the system’s high-throughput event processor.
 
 ### What Spark does:
 
-* consumes Twitch and market streams from Kafka
-* parses JSON
-* executes structured transformations
-* computes rolling windows
-* aggregates metrics
-* performs secondary anomaly detection
-* enriches events
-* outputs results to MongoDB and Kafka
+- consumes Twitch and market streams from Kafka
+- parses raw JSON events into strongly-typed schemas
+- filters identified anomalies
+- routes enriched data to specific MongoDB collections
+- acts as a scalable sink for the data lake
 
-Spark is the heavy-duty analytics engine.
+### Why this matters:
 
-### Example tasks:
-
-* top toxic users last 10 seconds
-* average market price every 1 second
-* detect conversation sentiment trend
-* detect volatility behavior
-* side-stream alerts
-
-Spark is what makes your project feel **enterprise-level**.
+Spark provides the **guarantee** that data makes it from Kafka to your database reliably, handling backpressure and schema validation automatically.
+This separation allows the Ingestion Service to focus on speed while Spark handles the persistent storage logic.
 
 ---
 
@@ -353,20 +343,20 @@ MongoDB stores everything:
 
 ### Collections:
 
-* raw_events
-* enriched_events
-* market_anomalies
-* chat_toxicity
-* alerts
+- raw_events
+- enriched_events
+- market_anomalies
+- chat_toxicity
+- alerts
 
 ### Why MongoDB?
 
 Because it is perfect for:
 
-* unstructured data
-* fast reads
-* dashboards
-* flexible schemas
+- unstructured data
+- fast reads
+- dashboards
+- flexible schemas
 
 Mongo is what your dashboard queries.
 
@@ -380,24 +370,24 @@ This is your user interface.
 
 #### Twitch Module
 
-* live chat feed (auto-updating)
-* toxicity timeline
-* top toxic users
-* chat spike anomalies
+- live chat feed (auto-updating)
+- toxicity timeline
+- top toxic users
+- chat spike anomalies
 
 #### Market Module
 
-* live price chart
-* anomaly markers
-* volatility indicators
-* alert timeline
+- live price chart
+- anomaly markers
+- volatility indicators
+- alert timeline
 
 #### System Module
 
-* Kafka metrics
-* Spark streaming throughput
-* ingestion performance
-* cluster health
+- Kafka metrics
+- Spark streaming throughput
+- ingestion performance
+- cluster health
 
 Streamlit is Python-native, reactive, simple, and dynamic.
 
@@ -407,23 +397,23 @@ Streamlit is Python-native, reactive, simple, and dynamic.
 
 Everything runs in containers:
 
-* Zookeeper
-* Kafka
-* Spark master
-* Spark workers
-* MongoDB
-* Mongo Express
-* NLP Service
-* Ingestion Service
-* Streamlit UI
+- Zookeeper
+- Kafka
+- Spark master
+- Spark workers
+- MongoDB
+- Mongo Express
+- NLP Service
+- Ingestion Service
+- Streamlit UI
 
 ### Docker Compose orchestrates:
 
-* networking
-* service dependencies
-* environment variables
-* scaling
-* restarts
+- networking
+- service dependencies
+- environment variables
+- scaling
+- restarts
 
 This is what makes your system **production-grade**.
 
@@ -435,16 +425,16 @@ At the end, you will have:
 
 ### A fully integrated multi-service distributed pipeline that:
 
-* ingests live Twitch chat in real time
-* ingests live market data in real time
-* normalizes all events
-* applies NLP toxicity detection
-* applies anomaly detection
-* publishes everything to Kafka
-* processes data with Spark
-* stores results in MongoDB
-* presents them in a Streamlit dashboard
-* all containerized and ready for deployment
+- ingests live Twitch chat in real time
+- ingests live market data in real time
+- normalizes all events
+- applies NLP toxicity detection
+- applies anomaly detection
+- publishes everything to Kafka
+- processes data with Spark
+- stores results in MongoDB
+- presents them in a Streamlit dashboard
+- all containerized and ready for deployment
 
 ### You can run one command:
 
@@ -454,12 +444,12 @@ docker compose up --build
 
 And suddenly you have:
 
-* real-time dashboards
-* machine learning pipelines
-* distributed messaging
-* analytics
-* anomaly detection
-* fully logged, monitored, engineered infrastructure
+- real-time dashboards
+- machine learning pipelines
+- distributed messaging
+- analytics
+- anomaly detection
+- fully logged, monitored, engineered infrastructure
 
 This is the same architecture major streaming companies use.
 
@@ -509,15 +499,15 @@ Runs all services automatically in a cluster.
 
 ---
 
-# If you want the *same depth* for:
+# If you want the _same depth_ for:
 
-* folder structure overview
-* exact deployment flow
-* testing strategy
-* scaling strategy
-* monitoring design
-* logging architecture
-* extension to multiple channels
-* or a full PDF-style documentation
+- folder structure overview
+- exact deployment flow
+- testing strategy
+- scaling strategy
+- monitoring design
+- logging architecture
+- extension to multiple channels
+- or a full PDF-style documentation
 
 I can generate that too.

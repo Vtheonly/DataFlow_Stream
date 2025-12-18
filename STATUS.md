@@ -9,21 +9,13 @@
 - Streamlit Dashboard: Running (`http://localhost:8501`)
 - Spark Master: Running (`http://localhost:8082`)
 - Spark Worker: Running
+- Ingestion Service: Stable (Automatic model download enabled)
 
-### ⏳ In Progress
+### 📊 System Health
 
-- **Ingestion Service**: Downloading NLP model `unitary/toxic-bert` (~260MB) from Hugging Face
-  - Status: Retrying due to network timeouts (normal for large downloads)
-  - ETA: 1-3 minutes depending on connection
-
-### 📊 Next Steps (Automatic)
-
-Once the model loads:
-
-1. ✅ Twitch & Market simulators will start generating data
-2. ✅ Data flows to Kafka topics (`chat_stream`, `market_stream`)
-3. ✅ Spark job processes data and writes to MongoDB
-4. ✅ Dashboard displays real-time analytics
+- **Data Flow**: Active
+- **NLP Model**: `unitary/toxic-bert` (Hosted by Hugging Face)
+- **Latencies**: Normal
 
 ## Access Information
 
@@ -62,5 +54,3 @@ docker exec -d spark-master /opt/spark/bin/spark-submit \
   --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.4.0,org.mongodb.spark:mongo-spark-connector_2.12:3.0.1 \
   /opt/spark/jobs/stream_processor.py
 ```
-
-Everything is configured correctly - just waiting for the model download to complete!

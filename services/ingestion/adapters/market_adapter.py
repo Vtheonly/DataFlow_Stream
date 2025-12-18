@@ -107,14 +107,14 @@ class MarketAdapter(BaseStreamSource):
                 raw_data = await websocket.recv()
                 raw_event = json.loads(raw_data)
                 
-                logger.debug(f"Received market data: {raw_event}")
+                # logger.debug(f"Received market data: {raw_event}")
                 
                 normalized_event = self.normalize(raw_event)
                 await self.producer.send_and_wait(
                     self.topic,
                     json.dumps(normalized_event).encode('utf-8')
                 )
-                logger.debug(f"Successfully sent enriched market event to Kafka topic: {self.topic}")
+                # logger.debug(f"Successfully sent enriched market event to Kafka topic: {self.topic}")
                 
             except websockets.exceptions.ConnectionClosed:
                 logger.warning("WebSocket connection closed. Reconnecting...")

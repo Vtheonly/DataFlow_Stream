@@ -2,7 +2,8 @@ import json
 import time
 import random
 import asyncio
-from twitchio.ext import commands
+import websockets
+import re
 from aiokafka import AIOKafkaProducer
 
 from adapters.base_stream_source import BaseStreamSource
@@ -12,142 +13,156 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-class TwitchChatAdapter(BaseStreamSource, commands.Bot):
+class TwitchChatAdapter(BaseStreamSource):
     """
-    Adapter for ingesting real-time chat messages from a Twitch channel.
+    Adapter for ingesting real-time chat messages via Raw WebSockets.
+    Bypasses twitchio library to avoid event loop conflicts.
     """
     def __init__(self, token: str, nickname: str, channel: str, producer: AIOKafkaProducer, topic: str):
-        super().__init__(token=token, prefix='!', initial_channels=[channel])
+        self.token = token if token.startswith("oauth:") else f"oauth:{token}"
+        self.nickname = nickname.lower()
+        self.channel = f"#{channel.lower().lstrip('#')}"
         self.producer = producer
         self.topic = topic
-        self.channel_name = channel
+        
+        self.uri = "wss://irc-ws.chat.twitch.tv:443"
         self.nlp_classifier = ToxicityClassifier.get_instance()
         self.anomaly_detector = ChatAnomalyDetector()
-        logger.info(f"TwitchChatAdapter initialized for channel: {channel}")
+        logger.info(f"TwitchChatAdapter (Raw WS) initialized for channel: {self.channel}")
 
     async def connect(self):
-        # The run method from commands.Bot handles the connection.
-        pass
+        try:
+            websocket = await websockets.connect(self.uri)
+            
+            # Authenticate
+            await websocket.send(f"PASS {self.token}")
+            await websocket.send(f"NICK {self.nickname}")
+            
+            # Join Channel
+            await websocket.send(f"JOIN {self.channel}")
+            
+            logger.info(f"✅ Successfully connected to Twitch IRC as {self.nickname}")
+            return websocket
+        except Exception as e:
+            logger.error(f"Failed to connect to Twitch IRC: {e}")
+            raise
 
     async def fetch_event(self):
-        # This is event-driven, handled by event_message.
         pass
 
-    def normalize(self, message) -> dict:
-        """
-        Normalizes a raw Twitch message and enriches it with NLP and anomaly detection.
-        """
+    def normalize(self, raw_message, author) -> dict:
         timestamp = time.time()
-        
-        # 1. Basic Normalization
         normalized_event = {
             "source": "twitch_chat",
             "type": "chat",
-            "event_id": message.id,
+            "event_id": str(timestamp),
             "timestamp": timestamp,
             "payload": {
-                "author": message.author.name,
-                "text": message.content,
-                "channel": self.channel_name,
+                "author": author,
+                "text": raw_message,
+                "channel": self.channel,
             }
         }
-
-        # 2. NLP Toxicity Classification
-        toxicity_scores = self.nlp_classifier.predict(message.content)
+        
+        # NLP Enrichment
+        toxicity_scores = self.nlp_classifier.predict(raw_message)
         normalized_event["enrichments"] = {"toxicity": toxicity_scores}
 
-        # 3. Anomaly Detection
+        # Anomaly Detection
         anomaly_result = self.anomaly_detector.detect(normalized_event)
         normalized_event["enrichments"]["anomaly"] = anomaly_result
         
         return normalized_event
 
-    async def event_ready(self):
-        logger.info(f"Successfully connected to Twitch as {self.nick}")
-
-    async def event_message(self, message):
-        if message.echo:
-            return
-
-        try:
-            logger.debug(f"Received message from {message.author.name}: {message.content}")
-            
-            # Normalize and enrich the message
-            normalized_event = self.normalize(message)
-            
-            # Send to Kafka
-            await self.producer.send_and_wait(
-                self.topic, 
-                json.dumps(normalized_event).encode('utf-8')
-            )
-            logger.debug(f"Successfully sent enriched chat message to Kafka topic: {self.topic}")
-
-        except Exception as e:
-            logger.error(f"Error processing Twitch message: {e}", exc_info=True)
-
     async def _run_simulator(self):
-        """A fallback simulator if the Twitch connection fails."""
         logger.info("Running Twitch chat simulator.")
-        sample_messages = [
-            "PogChamp", "LUL", "Kappa", "This stream is awesome!", 
-            "Hello world", "Spam spam spam", "Can you play simulated game?",
-            "You are bad at this", "I hate you", "idiot", "stupid", # Toxic examples
-            "Great play!", "GG", "EZ", "Clap", "monkaS"
-        ]
-        sample_authors = ["user1", "user2", "troll123", "fan456", "mod_guy"]
+        sample_messages = ["PogChamp", "LUL", "Kappa", "This stream is awesome!", "Hello world"]
+        sample_authors = ["user1", "user2", "troll123", "fan456"]
         
         while True:
-            try:
-                text = random.choice(sample_messages)
-                author = random.choice(sample_authors)
-                
-                # Create a mock message object structure expected by normalize
-                class MockMessage:
-                    def __init__(self, content, author_name):
-                        self.content = content
-                        self.author = type('obj', (object,), {'name': author_name})
-                        self.id = str(int(time.time() * 1000))
-                
-                mock_msg = MockMessage(text, author)
-                
-                # Normalize and enrich
-                normalized_event = self.normalize(mock_msg)
-                
-                # Send to Kafka
-                await self.producer.send_and_wait(
-                    self.topic, 
-                    json.dumps(normalized_event).encode('utf-8')
-                )
-                
-                # Also write directly to MongoDB
-                from utils.mongo_client import save_event
-                save_event(normalized_event.copy())
-                
-                logger.debug(f"Sent simulated chat message: {text}")
-                
-                await asyncio.sleep(random.uniform(0.5, 1.5))
-                
-            except Exception as e:
-                logger.error(f"Error in Twitch simulator: {e}")
-                await asyncio.sleep(1)
+            text = random.choice(sample_messages)
+            author = random.choice(sample_authors)
+            
+            normalized_event = self.normalize(text, author)
+            await self.producer.send_and_wait(self.topic, json.dumps(normalized_event).encode('utf-8'))
+            await asyncio.sleep(1)
 
     async def run(self):
-        logger.info("Starting Twitch Chat Adapter...")
-        try:
-            # Attempt to connect, but if it fails or returns immediately, run simulator
-            # Note: twitchio run() is blocking, so we might need to wrap it or handle failure
-            # For now, we'll assume if credentials are bad, it might raise or just not work.
-            # But since we want to FORCE "make it rain", let's just run the simulator if we can't connect.
-            # However, twitchio.Bot.run() is a blocking call. 
-            # We will try to run it, but if it fails, we catch it. 
-            # Actually, to "make it rain" reliably without valid creds, maybe we should just default to simulator 
-            # if the user wants it. But let's try to be robust.
-            
-            # If we want to support fallback, we need to handle the loop. 
-            # twitchio's run() starts the loop. 
-            # Let's try to start it, and if it fails, use simulator.
-            await super().start()
-        except Exception as e:
-            logger.warning(f"Failed to connect to Twitch: {e}. Falling back to simulator.")
-            await self._run_simulator()
+        logger.info(f"Starting Twitch Chat Adapter (Raw WebSocket Mode) for {self.channel}...")
+        while True:
+            try:
+                # Use context manager for auto-cleanup and better stability
+                async with websockets.connect(self.uri) as websocket:
+                    # Authenticate
+                    await websocket.send(f"PASS {self.token}")
+                    await websocket.send(f"NICK {self.nickname}")
+                    # Request capabilities for full message visibility
+                    await websocket.send("CAP REQ :twitch.tv/membership twitch.tv/tags twitch.tv/commands")
+                    await websocket.send(f"JOIN {self.channel}")
+                    
+                    logger.info(f"✅ Connected and joined {self.channel}")
+                    
+                    while True:
+                        try:
+                            # Use timeout to detect dead connections
+                            data = await asyncio.wait_for(websocket.recv(), timeout=30)
+                            if isinstance(data, bytes):
+                                data = data.decode('utf-8')
+                            
+                            for message in data.split('\r\n'):
+                                message = message.strip()
+                                if not message:
+                                    continue
+                                    
+                                logger.debug(f"RAW IRC: {message}")
+                                
+                                # Keep Alive
+                                if message.startswith("PING"):
+                                    await websocket.send("PONG :tmi.twitch.tv")
+                                    logger.debug("✅ Sent PONG to Twitch")
+                                    continue
 
+                                # Robust Twitch IRC Parser
+                                # Format: [@tags] :prefix COMMAND [params] [:trailing]
+                                irc_msg = message
+                                
+                                # 1. Extract Tags
+                                tags = {}
+                                if irc_msg.startswith("@"):
+                                    tags_str, irc_msg = irc_msg.split(" ", 1)
+                                
+                                # 2. Extract Prefix
+                                if irc_msg.startswith(":"):
+                                    prefix, irc_msg = irc_msg[1:].split(" ", 1)
+                                    username = prefix.split("!", 1)[0]
+                                else:
+                                    username = "system"
+
+                                # 3. Handle PRIVMSG
+                                if "PRIVMSG" in irc_msg:
+                                    # Format: #channel :message content
+                                    try:
+                                        params, content = irc_msg.split("PRIVMSG ", 1)[1].split(" :", 1)
+                                        channel = params.strip()
+                                        
+                                        logger.info(f"Received from {username}: {content}")
+                                        
+                                        # Normalize and Send
+                                        event = self.normalize(content, username)
+                                        await self.producer.send_and_wait(self.topic, json.dumps(event).encode('utf-8'))
+                                        logger.debug(f"Successfully sent enriched chat message to Kafka.")
+                                    except Exception as parse_e:
+                                        logger.debug(f"Parsing PRIVMSG failed: {parse_e}")
+
+                                elif "JOIN" in irc_msg:
+                                    logger.debug(f"System: {username} joined channel.")
+                        except asyncio.TimeoutError:
+                            logger.info("Socket Timeout (30s) - actively probing with PING")
+                            await websocket.send("PING :tmi.twitch.tv")
+                        except Exception as inner_e:
+                            logger.error(f"Error in message loop: {inner_e}")
+                            break
+
+            except Exception as e:
+                logger.warning(f"Connection lost or failed: {e}. Retrying in 5s...")
+                await asyncio.sleep(5)

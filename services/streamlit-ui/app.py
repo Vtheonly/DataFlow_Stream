@@ -22,7 +22,7 @@ local_css("utils/style.css")
 
 # --- Main App ---
 def main():
-    st.title("🌊 DataFlow Stream: Real-Time Analytics")
+    st.title("DataFlow Stream: Real-Time Analytics")
 
     # Initialize MongoDB connection
     try:

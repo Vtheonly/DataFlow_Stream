@@ -17,14 +17,14 @@ class ChatAnomalyDetector:
         self.user_message_counts = defaultdict(lambda: deque())
 
     def detect(self, event: dict) -> dict:
-        result = {"is_anomaly": "False", "type": None, "details": {}}
+        result = {"is_anomaly": "false", "type": None, "details": {}}
         current_time = event["timestamp"]
         
         # 1. Toxicity Spike Detection
         toxic_score = event.get("enrichments", {}).get("toxicity", {}).get("toxic", 0.0)
         if toxic_score > self.toxicity_threshold:
             result = {
-                "is_anomaly": "True",
+                "is_anomaly": "true",
                 "type": "toxicity_spike",
                 "details": {"user": event["payload"]["author"], "score": toxic_score}
             }
@@ -40,7 +40,7 @@ class ChatAnomalyDetector:
             
         if len(user_deque) > self.freq_threshold:
             result = {
-                "is_anomaly": "True",
+                "is_anomaly": "true",
                 "type": "frequency_spam",
                 "details": {"user": author, "count_in_window": len(user_deque)}
             }

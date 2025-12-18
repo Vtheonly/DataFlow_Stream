@@ -1,7 +1,6 @@
 kafka-python-ng==2.1.0
 aiokafka==0.8.1
 python-dotenv==1.0.0
-twitchio==2.7.0
 websockets==11.0.3
 transformers
 botocore

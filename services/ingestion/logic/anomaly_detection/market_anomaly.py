@@ -13,7 +13,7 @@ class MarketAnomalyDetector:
         """
         if len(self.prices) < 2:
             self.prices.append(current_price)
-            return {"isAnomaly": "False", "reason": "Insufficient data", "severity": 0.0}
+            return {"is_anomaly": "false", "reason": "Insufficient data"}
 
         mean = np.mean(self.prices)
         std = np.std(self.prices)
@@ -28,12 +28,10 @@ class MarketAnomalyDetector:
         self.prices.append(current_price)
 
         return {
-            "isAnomaly": str(is_anomaly),  # Convert to string for JSON serialization
+            "is_anomaly": "true" if is_anomaly else "false",
             "type": "z_score_outlier" if is_anomaly else "normal",
-            "severity": float(abs(z_score)),
-            "details": {
-                "mean": float(mean),
-                "std": float(std),
-                "z_score": float(z_score)
-            }
+            "severity": str(round(float(abs(z_score)), 4)),
+            "mean": str(round(float(mean), 4)),
+            "std": str(round(float(std), 4)),
+            "z_score": str(round(float(z_score), 4))
         }

@@ -43,6 +43,7 @@ def create_spark_session():
         SparkSession.builder.appName("DataFlowStreamProcessor")
         .config("spark.mongodb.output.uri", f"{MONGO_URI}{MONGO_DATABASE}")
         .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.4.0,org.mongodb.spark:mongo-spark-connector_2.12:3.0.1")
+        .config("spark.sql.streaming.checkpointLocation", "/tmp/spark-checkpoints")
         .getOrCreate()
     )
 
